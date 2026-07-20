@@ -1,0 +1,42 @@
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-cluster-backup
+  namespace: velero
+spec:
+  # Velero backs up Kubernetes API objects (and, with restic/node-agent, volume
+  # data) to an S3 bucket on a cron.
+  #
+  # WHY on a cluster whose apps are stateless: the DEPLOYED STATE is itself
+  # valuable. Namespaces, RBAC, ConfigMaps/Secrets, Ingress objects, the
+  # kube-prometheus-stack config — losing the cluster means rebuilding all of
+  # that by hand. A backup makes "recreate the cluster" a restore, not an
+  # archaeology project. It is disaster recovery for the control-plane state, not
+  # for the ML model (which is baked into the immutable image).
+  schedule: "0 3 * * *"   # 03:00 daily, off-peak
+  template:
+    includedNamespaces:
+      - default
+      - monitoring
+      - kube-system
+    # Exclude ephemeral objects that a restore should recreate fresh.
+    excludedResources:
+      - events
+      - events.events.k8s.io
+    snapshotVolumes: false     # apps are stateless; no PV snapshots needed here
+    ttl: 168h0m0s              # keep each backup 7 days
+---
+# Install prerequisite (run once), pointing Velero at an S3 bucket via IRSA:
+#
+#   velero install \
+#     --provider aws \
+#     --plugins velero/velero-plugin-for-aws:v1.9.0 \
+#     --bucket <YOUR_S3_BUCKET> \
+#     --backup-location-config region=us-east-1 \
+#     --no-secret \
+#     --service-account-name velero \
+#     --pod-annotations eks.amazonaws.com/role-arn=arn:aws:iam::<ACCOUNT_ID>:role/velero
+#
+# IRSA note: Velero writes to S3 using an IAM role bound to its ServiceAccount —
+# same OIDC->IAM->ServiceAccount pattern as the Cluster Autoscaler and ALB
+# Controller. No static AWS keys live in the cluster.

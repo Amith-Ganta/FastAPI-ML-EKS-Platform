@@ -1,0 +1,37 @@
+# Helm values for Goldilocks (Fairwinds) — a right-sizing dashboard.
+#
+#   helm repo add fairwinds-stable https://charts.fairwinds.com/stable
+#   helm upgrade --install goldilocks fairwinds-stable/goldilocks \
+#     -n goldilocks --create-namespace -f goldilocks-values.yaml
+#
+# WHAT it does: Goldilocks reads the VPA recommendations (k8s/autoscaling/vpa.yaml
+# must exist and the VPA recommender must be running) and renders, per workload,
+# the "guaranteed" and "burstable" request/limit numbers the VPA suggests. It
+# turns raw VPA recommendations into a page a human can act on.
+#
+# WHY it exists in this platform: it closes the right-sizing loop. You cannot
+# compute the correct pod size from the node's spec alone — the right requests
+# depend on the app's ACTUAL runtime behaviour under real traffic, which only
+# measurement reveals. Goldilocks is where the 25m CPU / 256Mi in
+# k8s/base/deployment.yaml came from, rather than a guess.
+#
+# To have Goldilocks watch a namespace, label it:
+#   kubectl label ns default goldilocks.fairwinds.com/enabled=true
+
+dashboard:
+  enabled: true
+  service:
+    # Internal by default — view via port-forward. Route through the shared ALB
+    # if you want it reachable without a tunnel.
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+vpa:
+  # Goldilocks depends on the VPA recommender. If you already installed the VPA
+  # (for k8s/autoscaling/vpa.yaml), leave this false to avoid a second install.
+  enabled: false

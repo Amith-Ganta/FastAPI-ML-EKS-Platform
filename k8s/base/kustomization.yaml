@@ -1,0 +1,15 @@
+# Apply the core workload (Deployment + Service) as a unit:
+#   kubectl apply -k k8s/base
+#
+# Autoscaling, ingress, observability, and backup are installed separately
+# because most are Helm charts (see each directory's *-values.yaml) rather than
+# plain manifests. The two enforcing manifests that ARE plain YAML — the HPA and
+# the Ingress — can be applied directly:
+#   kubectl apply -f k8s/autoscaling/hpa.yaml
+#   kubectl apply -f k8s/autoscaling/vpa.yaml        # needs the VPA CRDs installed
+#   kubectl apply -f k8s/ingress/ingress.yaml        # needs the ALB controller
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml

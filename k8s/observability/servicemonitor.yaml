@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: insurance-api
+  namespace: monitoring
+  labels:
+    app: insurance-api
+    release: monitoring   # matched by kube-prometheus-stack's serviceMonitor selector
+spec:
+  # A ServiceMonitor is how the Prometheus Operator learns to scrape a Service.
+  # Instead of hand-editing prometheus.yml, you declare the target as a K8s
+  # object and the operator regenerates the scrape config. This is the
+  # declarative equivalent of "add this endpoint to Prometheus."
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: insurance-api
+  endpoints:
+    - port: http          # the named port on the Service (k8s/base/service.yaml)
+      path: /metrics      # requires the app to expose Prometheus metrics here
+      interval: 30s
+# NOTE: the current image serves /health and /predict but does not yet expose a
+# /metrics endpoint. This ServiceMonitor is the wiring that lights up the moment
+# the app adds prometheus-fastapi-instrumentator (tracked in docs/monitoring).
+# Until then, cluster/node/pod metrics still flow via node-exporter and
+# kube-state-metrics — only the app-level request metrics wait on /metrics.

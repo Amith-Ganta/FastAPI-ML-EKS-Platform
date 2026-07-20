@@ -1,0 +1,59 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: insurance-api
+  namespace: default
+  labels:
+    app: insurance-api
+spec:
+  # The HPA changes the NUMBER of pods in response to load. It reads live CPU
+  # utilization from the Metrics Server (metrics.k8s.io) every 15s and compares
+  # it to the target below.
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insurance-api
+  # min 2 keeps the availability floor even at zero traffic (survives a node
+  # loss / rolling update). max 10 is a deliberate blast-radius cap: on this
+  # cluster a node holds ~11 pods (t3.small ENI/IP limit), so 10 replicas is the
+  # most a single small node group should ever need to absorb before the Cluster
+  # Autoscaler adds a node.
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # 50% of the *request* (25m). So the HPA targets ~12.5m average CPU per
+          # pod and adds replicas once real usage crosses that. 50% is chosen for
+          # headroom: inference is bursty, and scaling out at 50% leaves room to
+          # absorb a spike during the ~15-30s it takes a new pod to become Ready.
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleUp:
+      # React fast to load, but not instantly — a 15s window absorbs metric
+      # noise so one scrape spike doesn't over-provision.
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Percent
+          value: 100          # at most double the pod count per step
+          periodSeconds: 30
+    scaleDown:
+      # Scale IN slowly. A 300s (5 min) window prevents flapping: traffic that
+      # dips for 20s shouldn't tear down pods that a following spike then needs.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+---
+# NOTE ON HPA + VPA COEXISTENCE
+# The VPA in k8s/autoscaling/vpa.yaml runs in "Off" (recommendation-only) mode
+# ON PURPOSE. HPA and VPA must NOT both act on the same metric (CPU): the HPA
+# would add pods to cut per-pod CPU while the VPA simultaneously raised the CPU
+# request, and they would fight. The split we use:
+#   - HPA  -> owns CPU-driven horizontal scaling (this file, enforcing).
+#   - VPA  -> owns right-sizing REQUESTS as advice only (recommendations that
+#             Goldilocks visualises); a human applies them to the Deployment.

@@ -1,0 +1,55 @@
+# Helm values for the Kubernetes Cluster Autoscaler on EKS.
+#
+#   helm repo add autoscaler https://kubernetes.github.io/autoscaler
+#   helm upgrade --install cluster-autoscaler autoscaler/cluster-autoscaler \
+#     -n kube-system -f cluster-autoscaler-values.yaml
+#
+# WHY a third autoscaler on top of HPA + VPA:
+#   HPA adds pods. But pods need somewhere to run. When the HPA wants an 11th
+#   pod and every node is full (t3.small tops out near 11 pods on IP limits),
+#   the new pod sits Pending "Insufficient cpu/Too many pods". The Cluster
+#   Autoscaler watches for exactly those unschedulable pods and grows the EC2
+#   node group; when nodes sit underutilised it scales them back in. It is the
+#   layer that turns "the HPA wants more pods" into "there is a machine to run
+#   them on."
+
+autoDiscovery:
+  # The CA discovers which node groups it may scale by AWS tags, not hardcoded
+  # names — so adding a node group needs no CA config change.
+  clusterName: insurance-cluster
+
+awsRegion: us-east-1
+
+# IRSA: the CA pod assumes an IAM role via a Kubernetes ServiceAccount annotated
+# with the role ARN (OIDC -> IAM). This is least-privilege — only the CA's
+# service account can call the EC2 Auto Scaling APIs, not every pod on the node.
+rbac:
+  serviceAccount:
+    create: true
+    name: cluster-autoscaler
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::<ACCOUNT_ID>:role/eks-cluster-autoscaler"  # placeholder — set to your IRSA role ARN
+
+extraArgs:
+  # Bias toward releasing nodes: on a small/cost-sensitive cluster we want empty
+  # capacity returned promptly rather than parked.
+  scale-down-enabled: true
+  scale-down-unneeded-time: 5m
+  scale-down-utilization-threshold: "0.5"
+  # "least-waste" picks the node group whose new node leaves the least idle
+  # capacity for the pending pods — cheapest expansion.
+  expander: least-waste
+  balance-similar-node-groups: true
+  skip-nodes-with-system-pods: false
+
+# The CA itself must be schedulable and not evicted by its own scale-down logic.
+podAnnotations:
+  cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 256Mi

@@ -1,0 +1,40 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: insurance-api
+  namespace: default
+  labels:
+    app: insurance-api
+spec:
+  # The VPA observes actual CPU/memory usage over time and recommends better
+  # requests/limits. It answers a different question than the HPA:
+  #   HPA -> "how MANY pods?"   VPA -> "how BIG should each pod be?"
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: insurance-api
+  updatePolicy:
+    # "Off" = recommend only, never mutate running pods.
+    #
+    # This is intentional, not a limitation:
+    #   1. HPA already scales on CPU. If the VPA also changed CPU requests in
+    #      "Auto" mode, the two controllers would fight over the same signal.
+    #   2. "Auto" mode EVICTS pods to resize them — disruptive on a 2-node
+    #      cluster. We'd rather read the recommendation and roll it out during a
+    #      normal deploy.
+    #   3. Goldilocks (k8s/observability) reads these recommendations and renders
+    #      them as a right-sizing dashboard — the human-in-the-loop workflow that
+    #      produced the 25m CPU / 256Mi request in k8s/base/deployment.yaml.
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: insurance-api
+        controlledResources: ["cpu", "memory"]
+        # Guard rails on what the VPA is allowed to recommend, so a pathological
+        # sample can't suggest an absurd request that won't schedule on t3.small.
+        minAllowed:
+          cpu: 10m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 500m
+          memory: 512Mi

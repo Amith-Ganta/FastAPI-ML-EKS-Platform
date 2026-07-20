@@ -1,0 +1,5 @@
+# Normalize line endings so YAML/shell files stay LF across Windows/Linux.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pkl binary

@@ -1,0 +1,56 @@
+# Helm values for kube-prometheus-stack (Prometheus + Grafana + Alertmanager +
+# node-exporter + kube-state-metrics), installed into the `monitoring` namespace.
+#
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace -f kube-prometheus-stack-values.yaml
+#
+# WHY this stack: right-sizing and autoscaling are only trustworthy if you can
+# SEE real CPU/memory/latency over time. Metrics Server gives the HPA a live
+# number but keeps no history; Prometheus stores the time series, and Grafana
+# renders them. This is the feedback loop behind every resource decision in
+# k8s/base/deployment.yaml.
+
+prometheus:
+  service:
+    # Prometheus stays INTERNAL (ClusterIP). It scrapes cluster targets and is
+    # queried by Grafana in-cluster; it has no business being on the public
+    # internet. Reach it locally with `kubectl port-forward` when you need the
+    # raw PromQL Explore view.
+    type: ClusterIP
+  prometheusSpec:
+    retention: 7d
+    # Keep the scrape config discovering ServiceMonitors from all namespaces so
+    # the insurance-api ServiceMonitor (below) is picked up automatically.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+grafana:
+  # Grafana is the one component that IS meant to be reachable by a human, so it
+  # gets a LoadBalancer. (In the consolidated-ALB design you can instead route it
+  # through the shared Ingress on a /grafana path — cheaper, one fewer ELB.)
+  service:
+    type: LoadBalancer
+  # NOTE: admin/admin123 matches what was used during the live deployment for
+  # convenience. For anything internet-facing, move this to a Secret and rotate
+  # (see docs/security/README.md). Do NOT ship a known password on a public LB.
+  adminPassword: admin123
+  defaultDashboardsEnabled: true   # ~25 built-in cluster/node/pod dashboards
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi

@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: insurance-api
+  namespace: default
+  labels:
+    app: insurance-api
+  annotations:
+    # These annotations are read by the AWS Load Balancer Controller, which
+    # provisions ONE Application Load Balancer (ALB) for this Ingress and routes
+    # by path/host rules.
+    #
+    # WHY an Ingress + ALB instead of type: LoadBalancer on the Service:
+    #   A LoadBalancer Service creates a dedicated cloud load balancer PER
+    #   service. Three services => three ELBs => three hourly bills and three
+    #   public endpoints. An Ingress consolidates them: one ALB fronts every
+    #   service by path (/api, /grafana, ...). It does not replace the concept of
+    #   a load balancer — it replaces the *count* of them, and adds L7 routing,
+    #   TLS termination, and host/path rules a raw ELB can't express.
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip          # route straight to pod IPs (VPC CNI), skips the node hop
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-port: "traffic-port"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/group.name: insurance-platform  # share ONE ALB across Ingresses in this group
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: insurance-api
+                port:
+                  number: 80

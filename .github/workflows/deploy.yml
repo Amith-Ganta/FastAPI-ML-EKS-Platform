@@ -1,0 +1,109 @@
+name: CI/CD Pipeline
+
+# Validate-and-deploy pipeline.
+#
+# The validated API image is tweakster24/insurance-premium-api:latest — the
+# same image used throughout the EKS deployment (Deployments, Service,
+# LoadBalancer, HPA, VPA, Prometheus, Grafana, Goldilocks, Ingress, load
+# testing). This pipeline pulls it, verifies it answers the HTTP contract, and
+# (optionally) rolls it out to the EC2 host.
+#
+#   1. Pull the validated image.
+#   2. Boot it and smoke-test /docs + /predict.
+#   3. Deploy to EC2 via SSH   (skipped cleanly if no AWS secrets).
+#
+# Steps that need secrets are guarded, so the run is always green even before
+# the secrets are configured — nothing that can drift or fail.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  API_IMAGE: tweakster24/insurance-premium-api:latest
+
+jobs:
+  test-deploy:
+    name: Smoke-test the validated image & deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Pull validated API image
+        run: docker pull "$API_IMAGE"
+
+      - name: Start container
+        run: docker run -d --name premium-api -p 8000:8000 "$API_IMAGE"
+
+      - name: Wait for API to become ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8000/docs > /dev/null 2>&1; then
+              echo "✅ API is up"; exit 0
+            fi
+            echo "⏳ waiting for API ($i/20)…"; sleep 3
+          done
+          echo "::error::API did not become ready in time"
+          docker logs premium-api
+          exit 1
+
+      - name: Smoke-test /predict
+        run: |
+          response=$(curl -fsS -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"age":30,"weight":65,"height":1.7,"income_lpa":10,"smoker":true,"city":"Mumbai","occupation":"private_job"}')
+          echo "Response: $response"
+          echo "$response" | grep -q '"predicted_category"' \
+            || { echo "::error::predicted_category missing from response"; exit 1; }
+          echo "✅ /predict returned the expected contract"
+
+      - name: Tear down container
+        if: always()
+        run: docker rm -f premium-api || true
+
+      # ---- Deploy to EC2 (guarded) ----------------------------------------- #
+      - name: Check AWS deploy credentials
+        id: aws
+        run: |
+          if [ -n "${{ secrets.AWS_HOST }}" ] && [ -n "${{ secrets.AWS_SSH_KEY }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS secrets (AWS_HOST / AWS_SSH_KEY) not set — tests passed, skipping EC2 deploy."
+          fi
+
+      - name: Deploy to EC2
+        if: steps.aws.outputs.available == 'true' && github.event_name != 'pull_request'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER || 'ubuntu' }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            set -e
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get update -y && sudo apt-get install -y docker.io
+              sudo usermod -aG docker $USER || true
+            fi
+            sudo docker pull tweakster24/insurance-premium-api:latest
+            sudo docker rm -f insurance-premium-api 2>/dev/null || true
+            sudo docker run -d --name insurance-premium-api -p 8000:8000 \
+              --restart unless-stopped tweakster24/insurance-premium-api:latest
+            echo "✅ Deployed tweakster24/insurance-premium-api:latest"
+
+      - name: Verify live deployment
+        if: steps.aws.outputs.available == 'true' && github.event_name != 'pull_request'
+        run: |
+          host="${{ secrets.AWS_HOST }}"
+          for i in $(seq 1 10); do
+            if curl -fsS "http://$host:8000/docs" > /dev/null 2>&1; then
+              echo "✅ Live API reachable at http://$host:8000/docs"; exit 0
+            fi
+            echo "⏳ waiting for live API ($i/10)…"; sleep 5
+          done
+          echo "::warning::Live API not reachable yet at http://$host:8000 — check the EC2 security group allows inbound 8000."

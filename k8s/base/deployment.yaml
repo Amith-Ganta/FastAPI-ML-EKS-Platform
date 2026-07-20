@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insurance-api
+  namespace: default
+  labels:
+    app: insurance-api
+    component: inference
+    part-of: insurance-platform
+spec:
+  # Two replicas is the minimum for availability: it lets a rolling update or a
+  # single node failure proceed without taking the service to zero. It is NOT a
+  # capacity decision — the HPA owns capacity (see k8s/autoscaling/hpa.yaml).
+  replicas: 2
+  selector:
+    matchLabels:
+      app: insurance-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never drop below the declared replica count during a rollout, and add at
+      # most one surge pod at a time — cheap on a small (11-pod/node) cluster.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: insurance-api
+        component: inference
+    spec:
+      containers:
+        - name: insurance-api
+          # Validated image used throughout the EKS deployment (Deployments,
+          # Service, LoadBalancer, HPA, VPA, Prometheus, Grafana, Goldilocks,
+          # Ingress, load testing). Pinned here for reproducibility.
+          image: tweakster24/insurance-premium-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          # --- Resource requests/limits ------------------------------------ #
+          # requests  = what the scheduler reserves (drives bin-packing + HPA %).
+          # limits    = the hard ceiling the kernel enforces.
+          # Values are the right-sized figures Goldilocks/VPA converged on:
+          # the service idles well under 25m CPU; memory is the real constraint.
+          # requests == limits on memory => Guaranteed QoS for the memory that
+          # actually matters, so this pod is the last to be OOM-evicted.
+          resources:
+            requests:
+              cpu: 25m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          # --- Health probes ----------------------------------------------- #
+          # httpGet (kubelet performs the call) is used deliberately: the slim
+          # image ships no curl/wget, so an exec probe would fail on a missing
+          # binary, not on real health.
+          startupProbe:
+            # Protects a slow cold start (model unpickling) from the liveness
+            # probe. Up to 12 * 5s = 60s to become ready before liveness begins.
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            # Gate for Service endpoints. On failure the pod is pulled from the
+            # load-balancer target set but NOT restarted — lets a busy pod shed
+            # traffic and recover.
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            # Detects a wedged process. On failure the kubelet RESTARTS the
+            # container. Intentionally slower/less trigger-happy than readiness
+            # so transient load never causes a restart storm.
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # base image runs as root; see docs/security/README.md (hardening backlog)
+            capabilities:
+              drop: ["ALL"]

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: insurance-api
+  namespace: default
+  labels:
+    app: insurance-api
+    component: inference
+spec:
+  # ClusterIP (the default) gives the Deployment a single stable virtual IP and
+  # DNS name (insurance-api.default.svc.cluster.local) inside the cluster. Pods
+  # are ephemeral — their IPs change on every reschedule — so nothing should
+  # ever talk to a pod IP directly. The Service is the stable front door; kube-
+  # proxy load-balances across whichever pods are currently Ready.
+  #
+  # External exposure is deliberately NOT done here. In this platform the edge is
+  # an Ingress + AWS Load Balancer Controller (see k8s/ingress/), so a single ALB
+  # fronts every service by path instead of one cloud load balancer per Service.
+  type: ClusterIP
+  selector:
+    app: insurance-api
+  ports:
+    - name: http
+      port: 80          # stable port other services address
+      targetPort: 8000  # the container's uvicorn port
+      protocol: TCP

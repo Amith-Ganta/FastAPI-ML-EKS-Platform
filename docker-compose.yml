@@ -1,0 +1,32 @@
+# Local / single-host stack.
+#
+# `api` runs the validated image `tweakster24/insurance-premium-api:latest`
+# — the same image deployed on EKS. Pull-and-run, no local build required.
+services:
+  api:
+    image: tweakster24/insurance-premium-api:latest
+    ports:
+      - "8000:8000"
+    container_name: insurance-premium-api
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    container_name: streamlit-frontend
+    depends_on:
+      - api
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

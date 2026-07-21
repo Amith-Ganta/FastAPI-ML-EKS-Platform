@@ -1,7 +1,7 @@
 # Monitoring & observability
 
-How the platform is observed, why each piece exists, and — importantly — the two
-*separate* metric paths that people routinely confuse.
+How the platform is observed, why each piece exists, and (this is the part people
+miss) the two *separate* metric paths that routinely get confused.
 
 ---
 
@@ -9,23 +9,23 @@ How the platform is observed, why each piece exists, and — importantly — the
 
 ```mermaid
 flowchart LR
-    subgraph Live["Live path — for AUTOMATION"]
+    subgraph Live["Live path · for AUTOMATION"]
         MS[Metrics Server] --> HPA[HPA decisions]
         MS --> TOP[kubectl top]
     end
-    subgraph History["History path — for HUMANS"]
+    subgraph History["History path · for HUMANS"]
         PROM[Prometheus] --> GRAF[Grafana]
         PROM --> AM[Alertmanager]
     end
 ```
 
-- **Metrics Server** — a lightweight, *in-memory, no-history* aggregator of live
+- **Metrics Server** is a lightweight, *in-memory, no-history* aggregator of live
   CPU/memory. It exists so the **HPA** and `kubectl top` have current numbers.
   It is **not** a monitoring system.
-- **Prometheus** — a full time-series database that **scrapes and stores**
+- **Prometheus** is a full time-series database that **scrapes and stores**
   history, so humans can chart trends, and alerts can fire on them.
 
-They are not redundant — you need both. The HPA can't query Prometheus fast
+They are not redundant; you need both. The HPA can't query Prometheus fast
 enough for scaling; Prometheus keeps the history Metrics Server throws away.
 
 ---
@@ -38,10 +38,10 @@ Installed via `kube-prometheus-stack`
 ```mermaid
 flowchart TB
     subgraph Scrape targets
-        NE[node-exporter<br/>DaemonSet — per-node OS metrics]
+        NE[node-exporter<br/>DaemonSet · per-node OS metrics]
         KSM[kube-state-metrics<br/>object counts/states]
         CAD[kubelet / cAdvisor<br/>per-container usage]
-        APP["app /metrics<br/>(planned — ServiceMonitor ready)"]
+        APP["app /metrics<br/>(planned · ServiceMonitor ready)"]
     end
     NE --> PROM[(Prometheus<br/>ClusterIP · 7d retention)]
     KSM --> PROM
@@ -57,19 +57,19 @@ flowchart TB
   storage. Production would ship to long-term storage (Thanos/Cortex).
 - **ServiceMonitor:** the CRD that tells Prometheus *what* to scrape. Ours
   ([servicemonitor.yaml](../../k8s/observability/servicemonitor.yaml)) already
-  targets the app's `http` port `/metrics` — it activates the moment the app
+  targets the app's `http` port `/metrics`; it activates the moment the app
   exposes that endpoint.
 
 ---
 
 ## Grafana
 
-- **LoadBalancer** (or behind the shared ALB) — it's the human-facing view, so
-  it gets an address.
+- **LoadBalancer** (or behind the shared ALB), because it's the human-facing view,
+  so it gets an address.
 - **~25 dashboards** ship with the stack (`defaultDashboardsEnabled: true`):
   cluster CPU/memory, node health, pod resource usage, API-server latency,
   workload states.
-- **Credentials:** `admin` / `admin123` today — explicitly flagged for hardening
+- **Credentials:** `admin` / `admin123` today, explicitly flagged for hardening
   in [../security/](../security/) before any public exposure.
 
 Access without exposing it publicly:

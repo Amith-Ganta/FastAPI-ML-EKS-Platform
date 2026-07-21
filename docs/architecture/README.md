@@ -29,37 +29,119 @@ workload available, right-sized, and observable as load changes underneath it.
 
 ## Layered view
 
+One diagram, every real relationship: the request path, the three autoscalers
+acting on their *correct* targets, the observability pipeline, DR, and — the part
+most diagrams wrongly leave floating — the **control plane actually managing the
+cluster**. Solid arrows are the live request path; dashed arrows are
+control/observe relationships, each labelled with what it really does.
+
 ```mermaid
 flowchart TB
-    subgraph Edge
-        ALB[One shared ALB<br/>from Ingress]
-    end
-    subgraph Workload
-        SVC[Service ClusterIP] --> PODS[insurance-api pods x2+]
-    end
-    subgraph Control["Autoscaling control"]
-        HPA[HPA — count]
-        VPA[VPA — size, advice]
-        CA[Cluster Autoscaler — nodes]
-    end
-    subgraph Observe
-        MS[Metrics Server] --> HPA
-        PROM[Prometheus] --> GRAF[Grafana]
-    end
-    subgraph DR
-        VELERO[Velero] --> S3[(S3)]
+    CLIENT([Internet client])
+
+    subgraph CP["Control plane (EKS-managed)"]
+        API[kube-apiserver]
+        ETCD[(etcd<br/>desired state)]
+        SCH[scheduler]
+        CM[controller-manager<br/>Deployment · ReplicaSet ·<br/>Service · HPA controllers]
+        API <--> ETCD
+        API --- SCH
+        API --- CM
     end
 
-    ALB --> SVC
-    HPA -.-> PODS
-    CA -.-> PODS
-    VPA -.-> PODS
+    subgraph EDGE["Edge"]
+        ALB[AWS ALB]
+        ING[Ingress<br/>group.name: insurance-platform]
+    end
+
+    subgraph WORKLOAD["Workload (default ns)"]
+        SVC[Service<br/>ClusterIP :80→8000]
+        DEP[Deployment<br/>insurance-api]
+        RS[ReplicaSet]
+        PODS[Pods<br/>uvicorn:8000 ×2–10]
+        DEP --> RS --> PODS
+    end
+
+    subgraph NODES["Worker nodes"]
+        NG[Managed Node Group<br/>ASG · t3.small] -. launches .-> EC2[EC2 Nodes]
+    end
+
+    subgraph AUTOSCALE["Autoscaling controllers"]
+        HPA[HPA<br/>count · CPU 50% · 2–10]
+        VPA[VPA<br/>recommend-only]
+        CA[Cluster Autoscaler]
+    end
+
+    subgraph OBSERVE["Observability"]
+        MS[Metrics Server]
+        PROM[Prometheus<br/>ClusterIP]
+        GRAF[Grafana]
+    end
+
+    subgraph DR["Disaster recovery"]
+        VELERO[Velero]
+        S3[(S3<br/>7-day TTL)]
+    end
+
+    %% --- live request path (solid) ---
+    CLIENT --> ALB --> ING --> SVC --> PODS
+
+    %% --- control plane manages the cluster (dashed) ---
+    CM -. reconciles .-> DEP
+    SCH -. binds Pods to Nodes .-> EC2
+    CM -. manages .-> EC2
+    PODS -. run on .-> EC2
+
+    %% --- autoscaling, each on its correct target ---
+    MS -. pod CPU .-> HPA
+    HPA -. scales .-> DEP
+    VPA -. observes .-> PODS
+    VPA -. recommends requests .-> DEP
+    CA -. watches Pending Pods .-> PODS
+    CA -. adjusts desired size .-> NG
+
+    %% --- observability (Prometheus scrapes; Grafana reads) ---
+    PROM -. scrapes .-> MS
+    PROM -. scrapes .-> EC2
+    PROM -. scrapes .-> PODS
+    GRAF -. reads .-> PROM
+
+    %% --- DR: Velero (not Prometheus) writes backups ---
+    VELERO -. backs up objects .-> S3
+    VELERO -. reads objects .-> API
+
+    classDef cp fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B;
+    classDef work fill:#ECFDF5,stroke:#10B981,color:#064E3B;
+    class API,ETCD,SCH,CM cp;
+    class SVC,DEP,RS,PODS work;
 ```
 
-Read the dotted edges as "acts on": the HPA changes the pod *count*, the VPA
-recommends each pod's *size*, and the Cluster Autoscaler adds the *nodes* those
-pods land on. Three controllers, three non-overlapping dimensions — none of them
-steps on another's decision.
+**How to read it — the relationships reviewers check first:**
+
+- **Request path is Client → ALB → Ingress → Service → Pods.** The ALB never
+  wires straight to Pods; the Ingress (one shared ALB via `group.name`) sits
+  between them, and the Service load-balances across *Ready* Pods only.
+- **HPA scales the Deployment, not the Service and not the Pods directly.** It
+  reads pod CPU from the **Metrics Server** and patches the Deployment's replica
+  count; the Deployment owns the ReplicaSet, which owns the Pods.
+- **Cluster Autoscaler does not create Pods.** It watches *Pending* Pods and, when
+  they can't be scheduled, adjusts the **Managed Node Group's** ASG, which
+  launches new **Nodes** — then the scheduler places the pending Pods.
+- **VPA does not resize running Pods.** In `recommend-only` mode it *observes*
+  Pods and writes request *recommendations* (a human applies them to the
+  Deployment at the next deploy). It never fights the HPA on CPU.
+- **The control plane manages the cluster.** `kubectl` talks to the
+  **kube-apiserver**, which persists desired state in **etcd**; the
+  **scheduler** binds Pods to Nodes and the **controller-manager** runs the
+  Deployment/ReplicaSet/Service/HPA reconcile loops. Pods never call the control
+  plane on the request path.
+- **Observability flows one way:** Prometheus *scrapes* the Metrics Server, Nodes,
+  and Pods; **Grafana reads Prometheus**. Backups are **Velero → S3** — Prometheus
+  never writes to S3.
+
+Three autoscalers, three non-overlapping dimensions — HPA (how many pods), VPA
+(how big each pod), Cluster Autoscaler (how many nodes) — none steps on another's
+decision.
 
 ---
 

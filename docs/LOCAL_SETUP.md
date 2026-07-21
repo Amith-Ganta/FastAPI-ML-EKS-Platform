@@ -302,7 +302,7 @@ credentials from **GitHub repository secrets** (see the secrets table in the
 For local tooling, copy [`config/.env.example`](../config/.env.example) to
 `config/.env` and fill it in.
 
-**Never commit `.env` files or private keys** — they contain secrets.
+**Never commit `.env` files or private keys.** They contain secrets.
 
 ## Next Steps
 

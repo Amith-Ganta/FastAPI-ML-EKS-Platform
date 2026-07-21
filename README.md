@@ -175,18 +175,62 @@ docker run -p 8000:8000 tweakster24/insurance-premium-api:latest
 
 ## Screenshots
 
-Real captures from the live cluster. Status marks which are in the repo; ⬜ ones
-render once the PNG is dropped into [docs/images/](docs/images/) under the exact
-filename shown.
+Real captures from the live cluster (`insurance-cluster`, EKS v1.35, 2× t3.small
+in `us-east-1`). Where a terminal shot isn't in yet, the **actual command output**
+is pasted below as text evidence — copy-pasteable and greppable, not a picture.
+Status: ✅ captured (text or image) · ⬜ still pending.
 
-| View | File | Status |
+| View | Evidence | Status |
 |---|---|:--:|
-| ALB / LoadBalancer address | `docs/images/loadbalancer.png` | ⬜ |
-| `kubectl get pods` during a scale-out | `docs/images/kubectl-pods.png` | ⬜ |
-| HPA scaling under load | `docs/images/hpa-scaling.png` | ⬜ |
+| ALB / LoadBalancer address | text below + `docs/images/loadbalancer.png` | ✅ text |
+| `kubectl get pods` placement | text below + `docs/images/kubectl-pods.png` | ✅ text |
+| HPA config (reconciled to manifest) | text below | ✅ text |
+| HPA scaling **under load** | `docs/images/hpa-scaling.png` | ⬜ needs load test |
 | Grafana cluster dashboard | `docs/images/grafana-dashboard.png` | ⬜ |
 | Prometheus targets | `docs/images/prometheus-targets.png` | ⬜ |
 | Goldilocks right-sizing | `docs/images/goldilocks.png` | ⬜ |
+
+<details open>
+<summary><strong>Live capture — real command output</strong> (2026-07-21, cluster idle)</summary>
+
+**ALB / LoadBalancer** — the Ingress has a live AWS ALB address:
+
+```console
+$ kubectl get ingress -A
+NAMESPACE   NAME           CLASS   HOSTS   ADDRESS                                                                 PORTS   AGE
+default     main-ingress   alb     *       k8s-default-mainingr-1121e791af-713249520.us-east-1.elb.amazonaws.com   80      2d13h
+```
+
+**Pod placement** — 2 replicas Running, scheduled onto a worker node:
+
+```console
+$ kubectl get pods -o wide
+NAME                             READY   STATUS    RESTARTS   AGE     IP               NODE                             NOMINATED NODE   READINESS GATES
+insurance-api-76854984b5-lfhqk   1/1     Running   0          6h29m   192.168.54.113   ip-192-168-50-229.ec2.internal   <none>           <none>
+insurance-api-76854984b5-pcplr   1/1     Running   0          6h29m   192.168.61.185   ip-192-168-50-229.ec2.internal   <none>           <none>
+```
+
+**HPA — reconciled to the manifest.** A live HPA had been patched out of band to
+`maxReplicas: 20`; on a fixed 2-node group with **no Cluster Autoscaler** that
+ceiling isn't schedulable, so it was reverted to the committed `maxReplicas: 10`
+(see [Known drift](#scope--honesty-notes) and
+[docs/runbooks/](docs/runbooks/#hpa-drift)):
+
+```console
+$ kubectl apply -f k8s/autoscaling/hpa.yaml
+horizontalpodautoscaler.autoscaling/insurance-api configured
+
+$ kubectl get hpa insurance-api
+NAME            REFERENCE                  TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+insurance-api   Deployment/insurance-api   cpu: 3%/50%   2         10        2          2d13h
+```
+
+> The cluster is **idle** here (CPU 2–3% vs the 50% target, replicas flat at 2) —
+> so this is a healthy-at-rest snapshot, **not** a scale-out. `hpa-scaling.png`
+> still needs a real load test where `REPLICAS` visibly climbs; see
+> [docs/performance/](docs/performance/).
+
+</details>
 
 <details>
 <summary><strong>How to capture these</strong> — six commands, run against the live cluster</summary>
@@ -226,7 +270,12 @@ kubectl -n goldilocks port-forward svc/goldilocks-dashboard 8080:80
 
 Capture the HPA/pods shots **during an actual load test** (see
 [docs/performance/](docs/performance/)) so they show real scaling, not an idle
-cluster. Flip the status cell to ✅ when the PNG lands.
+cluster. Flip the status cell to ✅ when the PNG lands. The first three rows are
+already covered as **text** above; the load-test HPA shot and the three dashboard
+shots (Grafana / Prometheus / Goldilocks) are still pending — and the last three
+only apply if those tools are installed (`kubectl get svc -A | grep -Ei
+'grafana|promet|goldi'` returns nothing if they aren't — skip them, don't fake
+them).
 
 </details>
 

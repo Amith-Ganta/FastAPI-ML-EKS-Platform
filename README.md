@@ -41,58 +41,6 @@ hand-tuned static config that is stale the day it ships.
 
 ## Platform architecture
 
-```mermaid
-flowchart TB
-    subgraph Internet
-        U["Clients / load test"]
-    end
-
-    subgraph AWS["AWS (us-east-1)"]
-        ALB["Application Load Balancer<br/>(one, shared)"]
-
-        subgraph EKS["EKS cluster: insurance-cluster"]
-            subgraph CP["Control plane (AWS-managed)"]
-                API["kube-apiserver"]
-                SCHED["scheduler"]
-                CM["controller-manager"]
-                ETCD["etcd"]
-            end
-
-            subgraph NG["Managed node group (2x t3.small)"]
-                subgraph N1["Node 1"]
-                    P1["insurance-api pod"]
-                    P2["insurance-api pod"]
-                end
-                subgraph N2["Node 2"]
-                    P3["insurance-api pod"]
-                    MON["Prometheus / Grafana"]
-                end
-            end
-
-            SVC["Service: insurance-api<br/>(ClusterIP)"]
-            HPA["HPA"]
-            VPA["VPA (recommend)"]
-            CA["Cluster Autoscaler"]
-            MS["Metrics Server"]
-        end
-
-        S3["S3 (Velero backups)"]
-    end
-
-    U --> ALB --> SVC
-    SVC --> P1 & P2 & P3
-    MS --> HPA
-    HPA -. scales replicas .-> SVC
-    CA -. adds nodes .-> NG
-    VPA -. recommends size .-> P1 & P2 & P3
-    MON --> S3
-
-    classDef ctl fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B;
-    classDef work fill:#ECFDF5,stroke:#10B981,color:#064E3B;
-    class API,SCHED,CM,ETCD,HPA,VPA,CA,MS ctl;
-    class P1,P2,P3,MON,SVC work;
-```
-
 > Larger, layer-by-layer diagrams live in [docs/diagrams/](docs/diagrams/):
 > request lifecycle, autoscaling decision flow, scheduling, control-plane
 > interaction, the monitoring pipeline, and more.

@@ -45,9 +45,9 @@ kubectl patch hpa insurance-api --type merge \
   -p '{"spec":{"minReplicas":3,"maxReplicas":15}}'
 ```
 
-> Manually scaling a Deployment that has an HPA is a temporary measure only — the
-> HPA reconciles back to its computed value within a sync period. Change the HPA,
-> not the Deployment, for anything lasting.
+> Manually scaling a Deployment that has an HPA is a temporary measure. The HPA
+> reconciles back to its computed value within a sync period. Change the HPA, not
+> the Deployment, for anything lasting.
 
 **Confirm:** `kubectl get pods -w` until the new count is `Running` + `Ready`.
 
@@ -64,7 +64,7 @@ kubectl rollout status deploy/insurance-api   # blocks until healthy or fails
 ```
 
 `maxUnavailable: 0` guarantees no capacity dip; `maxSurge: 1` adds one pod at a
-time. If `rollout status` hangs, the new pods are failing readiness — jump to
+time. If `rollout status` hangs, the new pods are failing readiness, so jump to
 [CrashLoopBackOff](#crashloopbackoff).
 
 ---
@@ -79,7 +79,7 @@ kubectl rollout status deploy/insurance-api
 ```
 
 This works because each rollout created a new ReplicaSet and the old ones are
-retained at 0 replicas — rollback just scales the old one back up.
+retained at 0 replicas, so rollback just scales the old one back up.
 
 ---
 
@@ -95,7 +95,7 @@ kubectl logs <pod> --previous        # why the last run died
 | Likely cause | Tell | Fix |
 |---|---|---|
 | App throws on startup (bad model load, missing dep) | Traceback in `--previous` logs | Fix image; redeploy validated tag |
-| Liveness probe too aggressive | `Killing` events before app is up | Ensure `startupProbe` covers cold start (it does here — 60s) |
+| Liveness probe too aggressive | `Killing` events before app is up | Ensure `startupProbe` covers cold start (it does here, 60s) |
 | OOMKilled | `Last State: OOMKilled` | Raise memory limit (check VPA rec) |
 | Wrong port / probe path | Probe `connection refused` | Confirm container listens on 8000, `/health` exists |
 
@@ -113,7 +113,7 @@ kubectl describe pod <pod>   # Events show the exact pull error
 
 | Cause | Fix |
 |---|---|
-| Wrong image/tag | Confirm it's `tweakster24/insurance-premium-api:latest` (the validated image) — a typo'd name is the #1 cause |
+| Wrong image/tag | Confirm it's `tweakster24/insurance-premium-api:latest` (the validated image); a typo'd name is the #1 cause |
 | Private registry, no auth | Add an `imagePullSecret` (not needed for this public image) |
 | Rate limited / registry down | Retry; check Docker Hub status |
 | Node has no internet egress | Check node's NAT/route (see [node runbook](#node-notready--node-failure)) |
@@ -151,8 +151,8 @@ kubectl describe node <node>          # Conditions: MemoryPressure/DiskPressure/
 kubectl get pods -o wide | grep <node>
 ```
 
-- Kubernetes evicts and reschedules the node's pods after the eviction timeout —
-  this is why `replicas: 2` spread across nodes matters.
+- Kubernetes evicts and reschedules the node's pods after the eviction timeout.
+  This is why `replicas: 2` spread across nodes matters.
 - **Fix:** in a managed node group, cordon + drain and let the ASG replace it:
   ```bash
   kubectl cordon <node>
@@ -191,9 +191,9 @@ kubectl describe ingress <ingress>
 **Symptom:** LB/ALB is up but requests 503 or hang.
 
 ```bash
-kubectl get endpoints insurance-api-service   # <-- MOST IMPORTANT: is it empty? (Service is *-service)
+kubectl get endpoints insurance-api   # <-- MOST IMPORTANT: is it empty?
 kubectl get pods -l app=insurance-api
-kubectl describe svc insurance-api-service     # selector vs pod labels
+kubectl describe svc insurance-api     # selector vs pod labels
 ```
 
 | Finding | Meaning | Fix |
@@ -234,7 +234,7 @@ kubectl top pods                         # does Metrics Server work at all?
 
 **Symptom:** `kubectl get hpa` shows a `MAXPODS` (or min) value that disagrees
 with `k8s/autoscaling/hpa.yaml`. Observed once as live `MAXPODS 20` vs the
-committed `maxReplicas: 10` — the running HPA had been patched out of band.
+committed `maxReplicas: 10`. The running HPA had been patched out of band.
 
 ```bash
 # See the live value vs the manifest
@@ -248,7 +248,7 @@ Git is the source of truth. Reconcile one of two ways:
 # A) revert the cluster to the manifest (10)
 kubectl apply -f k8s/autoscaling/hpa.yaml
 
-# B) OR adopt the higher ceiling deliberately — edit the manifest, commit, apply
+# B) OR adopt the higher ceiling deliberately: edit the manifest, commit, apply
 #    (remember: t3.small holds ~11 pods, so >10 needs the Cluster Autoscaler to
 #     add a node; see the sizing note in hpa.yaml before raising it)
 ```
@@ -267,7 +267,7 @@ kubectl -n monitoring port-forward svc/prometheus-operated 9090:9090
 
 | Cause | Fix |
 |---|---|
-| App target down because no `/metrics` | **Expected today** — the app doesn't expose `/metrics` yet (see honesty note). Cluster metrics still flow via node-exporter/kube-state-metrics. |
+| App target down because no `/metrics` | Expected. The app doesn't expose `/metrics` yet, so it has no scrape target. Cluster metrics still flow via node-exporter/kube-state-metrics. |
 | ServiceMonitor label mismatch | ServiceMonitor selector must match the Service's labels + the release's `serviceMonitorSelector` |
 | Scrape network blocked | Check NetworkPolicy / SG between Prometheus and target |
 

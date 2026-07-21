@@ -104,7 +104,7 @@ three *different* questions, deliberately non-overlapping.
 ```mermaid
 flowchart LR
     subgraph Q1["How MANY pods?"]
-        HPA[HorizontalPodAutoscaler<br/>metric: CPU 50%<br/>range: 2–10]
+        HPA[HorizontalPodAutoscaler<br/>metric: CPU 50%<br/>range: 2-10]
     end
     subgraph Q2["Are there MACHINES for them?"]
         CA[Cluster Autoscaler<br/>trigger: Pending pods<br/>t3.small ≈ 11 pods/node]
@@ -156,7 +156,7 @@ flowchart LR
     class EVICT danger;
 ```
 
-> `Auto` is drawn only to show the road *not* taken — on a 2-node cluster,
+> `Auto` is drawn only to show the road *not* taken. On a 2-node cluster,
 > eviction-to-resize is too disruptive, and it collides with the HPA on CPU.
 
 ---
@@ -191,7 +191,7 @@ flowchart TB
     KUBELET --> PROBE[startup→readiness→liveness]
 ```
 
-> The `FILTER` step keys on **requests**, not usage — which is exactly why the
+> The `FILTER` step keys on **requests**, not usage, which is exactly why the
 > `25m`/`256Mi` requests (and the VPA that tunes them) directly control density.
 
 ---
@@ -223,7 +223,7 @@ sequenceDiagram
     API->>ETCD: persist status
 ```
 
-> Note there is no central orchestrator issuing commands — every component
+> Note there is no central orchestrator issuing commands. Every component
 > **watches** the API server and reconciles independently. That's the level-
 > triggered controller pattern the whole platform is built on.
 
@@ -303,7 +303,7 @@ flowchart LR
     API --> OBJ[Serialize: namespaces,<br/>RBAC, ConfigMaps, Secrets,<br/>Ingress, Deployments]
     OBJ --> S3[(S3 bucket<br/>ttl 168h / 7 days)]
     S3 -. velero restore .-> NEW[Rebuild objects<br/>on a fresh cluster]
-    note["snapshotVolumes: false —<br/>the app is stateless,<br/>we back up CONFIG not disks"]
+    note["snapshotVolumes: false:<br/>the app is stateless,<br/>we back up CONFIG not disks"]
 ```
 
 ---
@@ -325,5 +325,5 @@ flowchart TB
     SSH --> DONE
 ```
 
-> The pipeline never *builds* the app image — it consumes the **validated**
+> The pipeline never *builds* the app image. It consumes the **validated**
 > `tweakster24` image and gates deployment on a real prediction succeeding.

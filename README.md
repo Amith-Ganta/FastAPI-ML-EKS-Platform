@@ -246,5 +246,11 @@ manifests and the claims never drift apart:
   `<VPC_ID>`, IRSA role ARNs) that are environment-specific by design.
 - `grafana admin/admin123` and other convenience defaults are flagged in
   [docs/security/](docs/security/) as items to harden before any public exposure.
+- **Known drift:** the committed HPA (`k8s/autoscaling/hpa.yaml`) declares
+  `maxReplicas: 10`; a live cluster was observed running `maxReplicas: 20`,
+  i.e. hand-patched out of band. Git is the source of truth here — reconcile with
+  `kubectl apply -f k8s/autoscaling/hpa.yaml` (revert to 10) or bump the manifest
+  to 20 deliberately if the higher ceiling is intended. See
+  [docs/runbooks/](docs/runbooks/#hpa-drift).
 
 Nothing here claims a capability the manifests don't implement.

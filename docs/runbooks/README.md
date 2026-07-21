@@ -230,6 +230,33 @@ kubectl top pods                         # does Metrics Server work at all?
 
 ---
 
+## HPA drift
+
+**Symptom:** `kubectl get hpa` shows a `MAXPODS` (or min) value that disagrees
+with `k8s/autoscaling/hpa.yaml`. Observed once as live `MAXPODS 20` vs the
+committed `maxReplicas: 10` — the running HPA had been patched out of band.
+
+```bash
+# See the live value vs the manifest
+kubectl get hpa insurance-api -o jsonpath='{.spec.maxReplicas}{"\n"}'
+grep maxReplicas k8s/autoscaling/hpa.yaml
+```
+
+Git is the source of truth. Reconcile one of two ways:
+
+```bash
+# A) revert the cluster to the manifest (10)
+kubectl apply -f k8s/autoscaling/hpa.yaml
+
+# B) OR adopt the higher ceiling deliberately — edit the manifest, commit, apply
+#    (remember: t3.small holds ~11 pods, so >10 needs the Cluster Autoscaler to
+#     add a node; see the sizing note in hpa.yaml before raising it)
+```
+
+**Confirm:** the two values above match after reconciling.
+
+---
+
 ## Prometheus targets down
 
 ```bash

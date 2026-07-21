@@ -4,7 +4,7 @@
 
 The Insurance Premium Predictor is an **image-first** ML microservice. The core
 deliverable is a single, self-contained Docker image
-(`tweakster24/insurance-premium-api:latest` — the validated image used
+(`tweakster24/insurance-premium-api:latest`, the validated image used
 throughout the EKS deployment) that is verified by CI and run unchanged on any
 host. An optional Streamlit UI is provided
 as a separate client. The system favours a single immutable artifact over

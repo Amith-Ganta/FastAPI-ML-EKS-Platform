@@ -12,14 +12,14 @@ top-level [README](../../README.md#screenshots).
 | `prometheus-targets.png` | Prometheus `/targets` page (UP targets) | `kubectl -n monitoring port-forward svc/prometheus-server 9090:80` → `localhost:9090/targets` |
 | `goldilocks.png` | Goldilocks VPA recommendation for `insurance-api` | `kubectl -n goldilocks port-forward svc/goldilocks-dashboard 8080:80` → `localhost:8080` |
 
-Service/namespace names vary by install — find yours first with
+Service/namespace names vary by install, so find yours first with
 `kubectl get svc -A | grep -Ei 'grafana|promet|goldi'`.
 
 Tips:
 - Capture during an actual load test (see [../performance/](../performance/)) so
   the HPA/pods screenshots show real scaling, not an idle cluster.
-- Terminal screenshots are more convincing than diagrams here — they show the
+- Terminal screenshots are more convincing than diagrams here, because they show the
   real cluster responded.
 - The top-level [README screenshot table](../../README.md#screenshots) tracks
-  which of the six are in the repo (✅) vs still pending (⬜) — flip the marker
+  which of the six are in the repo (✅) vs still pending (⬜), then flip the marker
   when you add a PNG.

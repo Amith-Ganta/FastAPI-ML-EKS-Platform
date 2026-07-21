@@ -14,7 +14,7 @@ Any HTTP load generator works. A minimal in-cluster loop against the Service:
 kubectl run loadgen --rm -it --image=williamyeh/hey --restart=Never -- \
   -z 5m -c 50 -m POST \
   -H 'Content-Type: application/json' \
-  -d '{"age":40,"bmi":27.5,"children":1,"smoker":"no","region":"southwest","sex":"male"}' \
+  -d '{"age":40,"weight":72,"height":1.75,"income_lpa":12,"smoker":false,"city":"Mumbai","occupation":"private_job"}' \
   http://insurance-api.default.svc.cluster.local/predict
 ```
 

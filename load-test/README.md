@@ -15,7 +15,7 @@ kubectl run loadgen --rm -it --image=williamyeh/hey --restart=Never -- \
   -H 'Content-Type: application/json' \
   -d @- \
   http://insurance-api.default.svc.cluster.local/predict <<'JSON'
-{"age":40,"bmi":27.5,"children":1,"smoker":"no","region":"southwest","sex":"male"}
+{"age":40,"weight":72,"height":1.75,"income_lpa":12,"smoker":false,"city":"Mumbai","occupation":"private_job"}
 JSON
 ```
 

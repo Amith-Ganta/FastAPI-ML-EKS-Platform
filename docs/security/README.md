@@ -3,11 +3,11 @@
 The security posture of the platform, split honestly into **what's implemented**
 and **what's deliberately deferred** (with the fix for each). A demo/learn
 cluster that pretends to be hardened is worse than one that's honest about its
-gaps — so this document names them.
+gaps, so this document names them.
 
 ---
 
-## IAM & IRSA — least privilege for pods
+## IAM & IRSA: least privilege for pods
 
 **IRSA (IAM Roles for Service Accounts)** is how a pod gets AWS permissions
 *without* node-wide credentials. The chain:
@@ -25,7 +25,7 @@ ServiceAccount, so the AWS LB Controller can touch ELBs but nothing else, and th
 Cluster Autoscaler can touch the ASG but nothing else.
 
 Components here that use IRSA (role ARNs are `<ACCOUNT_ID>` placeholders in the
-Helm values, by design — they're environment-specific):
+Helm values, by design, because they're environment-specific):
 
 | Component | Needs | Values file |
 |---|---|---|
@@ -34,11 +34,11 @@ Helm values, by design — they're environment-specific):
 | Velero | Read/write the backup S3 bucket | [velero-schedule.yaml](../../k8s/backup/velero-schedule.yaml) |
 
 **Principle:** each role's policy should grant only the specific actions that
-component needs — not `*`. Review these monthly (see [../operations/](../operations/)).
+component needs, not `*`. Review these monthly (see [../operations/](../operations/)).
 
 ---
 
-## RBAC — least privilege for humans & controllers
+## RBAC: least privilege for humans & controllers
 
 Kubernetes RBAC governs who/what can call the API. Guidance for this platform:
 
@@ -61,10 +61,10 @@ Implemented in [`k8s/base/deployment.yaml`](../../k8s/base/deployment.yaml):
 | Resource limits | `limits.cpu/memory` set | A runaway container can't starve its node |
 
 **Deferred (named honestly):**
-- `runAsNonRoot: true` + a non-root base image — the current validated image runs
+- `runAsNonRoot: true` + a non-root base image. The current validated image runs
   as **root**, so this is a known gap, fixed by rebuilding the image on a non-root
   base and flipping the flag.
-- `readOnlyRootFilesystem: true` — add once the app's writable paths are confirmed.
+- `readOnlyRootFilesystem: true`, added once the app's writable paths are confirmed.
 
 ---
 
@@ -84,7 +84,7 @@ inline values.
 
 ## Network isolation
 
-- **Prometheus is `ClusterIP`** — never exposed; only Grafana (the human view)
+- **Prometheus is `ClusterIP`**, never exposed; only Grafana (the human view)
   gets an address.
 - **Ingress consolidates the edge** onto one ALB, so there's a single, auditable
   entry point instead of many per-Service ELBs.
@@ -115,5 +115,5 @@ inline values.
 5. Tighten each IRSA policy to specific actions/resources; audit monthly.
 6. Confirm etcd KMS encryption at rest on the cluster.
 
-None of these are hidden — they're the honest gap between "works and is
+None of these are hidden; they're the honest gap between "works and is
 reasonably hardened" and "production-grade," and each has a concrete next step.

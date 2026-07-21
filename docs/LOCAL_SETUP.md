@@ -11,8 +11,8 @@
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Amith-Ganta/FastAPI-ML-Docker-AWS.git
-cd FastAPI-ML-Docker-AWS
+git clone https://github.com/Amith-Ganta/FastAPI-ML-EKS-Platform.git
+cd FastAPI-ML-EKS-Platform
 ```
 
 ### 2. Setup with Docker Compose (Recommended)
@@ -92,7 +92,7 @@ streamlit run frontend.py --server.port 8501
 ## Project Structure Reference
 
 ```
-FastAPI-ML-Docker-AWS/
+FastAPI-ML-EKS-Platform/
 ├── backend/
 │   ├── app.py                    # FastAPI application
 │   ├── model.pkl                 # Trained ML model

@@ -13,7 +13,7 @@ The Insurance Premium Category Predictor API is built with FastAPI and provides 
 
 FastAPI automatically generates interactive API documentation:
 - **Swagger UI**: `GET /docs`
-- **ReDoc**: `GET/redoc`
+- **ReDoc**: `GET /redoc`
 - **OpenAPI Schema**: `GET /openapi.json`
 
 ## Endpoints

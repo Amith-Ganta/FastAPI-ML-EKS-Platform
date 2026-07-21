@@ -16,8 +16,8 @@ Thank you for your interest in contributing to the Insurance Premium Predictor! 
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR-USERNAME/FastAPI-ML-Docker-AWS.git
-cd FastAPI-ML-Docker-AWS
+git clone https://github.com/YOUR-USERNAME/FastAPI-ML-EKS-Platform.git
+cd FastAPI-ML-EKS-Platform
 
 # Create feature branch
 git checkout -b feature/your-feature-name

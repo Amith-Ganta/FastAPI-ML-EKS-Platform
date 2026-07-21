@@ -41,6 +41,137 @@ hand-tuned static config that is stale the day it ships.
 
 ## Platform architecture
 
+One picture of every real relationship: the live request path (solid) and the
+control, scaling, observability, and backup loops (dashed), each labelled with
+what it actually does. Nothing floats; every arrow is a genuine Kubernetes or
+AWS interaction.
+
+```mermaid
+flowchart TB
+    CLIENT([" Internet<br/>client "])
+    KCTL["kubectl"]
+
+    subgraph AWS["AWS · us-east-1"]
+      direction TB
+      ALB["Application Load Balancer<br/>internet-facing · L7"]
+
+      subgraph EKS["Amazon EKS — insurance-cluster"]
+        direction TB
+
+        subgraph CP["Control plane · AWS-managed"]
+          direction TB
+          API["kube-apiserver"]
+          ETCD[("etcd<br/>desired state")]
+          SCH["scheduler"]
+          CM["controller-manager"]
+          API <-->|persist / watch| ETCD
+          API --- SCH
+          API --- CM
+        end
+
+        subgraph EDGE["Ingress and routing"]
+          direction TB
+          LBC["AWS Load Balancer<br/>Controller"]
+          ING["Ingress<br/>class: alb"]
+          SVC["Service · ClusterIP<br/>:80 → :8000"]
+        end
+
+        subgraph WL["Workload objects"]
+          direction TB
+          DEP["Deployment<br/>insurance-api"]
+          RS["ReplicaSet"]
+          PODS["Pods<br/>uvicorn :8000 · Ready"]
+          DEP -->|owns| RS
+          RS -->|creates| PODS
+        end
+
+        subgraph NP["Managed node group"]
+          direction TB
+          NG["Node group · ASG<br/>t3.small"]
+          EC2["EC2 worker nodes<br/>kubelet"]
+          NG -->|launches| EC2
+        end
+
+        subgraph AS["Autoscaling"]
+          direction TB
+          MS["Metrics Server"]
+          HPA["HPA<br/>CPU 50% · 2–10"]
+          VPA["VPA<br/>recommend-only"]
+          CA["Cluster Autoscaler"]
+        end
+
+        subgraph OBS["Monitoring"]
+          direction TB
+          PROM["Prometheus"]
+          GRAF["Grafana"]
+          GRAF -->|queries| PROM
+        end
+
+        subgraph BK["Backup"]
+          direction TB
+          VELERO["Velero"]
+        end
+      end
+
+      S3[("Amazon S3<br/>cluster backups")]
+    end
+
+    %% ---- request data path (solid) ----
+    CLIENT -->|HTTPS| ALB
+    ALB -->|routes to Ready targets| SVC
+    SVC -->|selects Ready Pods| PODS
+
+    %% ---- ingress provisioning: the controller bridges Ingress and the ALB ----
+    ING -. watched by .-> LBC
+    LBC -. provisions / configures .-> ALB
+    ING -. backend: Service .-> SVC
+
+    %% ---- control plane governs the workload ----
+    KCTL -->|apply| API
+    CM -. reconciles .-> DEP
+    SCH -. binds Pending Pods to Nodes .-> PODS
+    PODS -. scheduled onto .-> EC2
+
+    %% ---- autoscaling, each on its correct target ----
+    EC2 -. kubelet metrics .-> MS
+    MS -. pod CPU / mem .-> HPA
+    HPA -. scales replicas .-> DEP
+    VPA -. observes usage .-> PODS
+    VPA -. recommends requests .-> DEP
+    PODS -. pending Pods .-> CA
+    CA -. adjusts desired size .-> NG
+
+    %% ---- monitoring: Prometheus scrapes, Grafana reads ----
+    PROM -. scrapes .-> PODS
+    PROM -. scrapes .-> EC2
+    PROM -. service discovery .-> API
+
+    %% ---- backup ----
+    VELERO -. reads objects .-> API
+    VELERO -. writes backups .-> S3
+
+    classDef cp   fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B;
+    classDef req  fill:#ECFDF5,stroke:#10B981,color:#064E3B;
+    classDef mgmt fill:#EDE9FE,stroke:#7C3AED,color:#3B0764;
+    classDef node fill:#FEF3C7,stroke:#D97706,color:#78350F;
+    classDef ctrl fill:#F1F5F9,stroke:#64748B,color:#0F172A;
+    class KCTL,API,ETCD,SCH,CM cp;
+    class ALB,LBC,ING,SVC,PODS req;
+    class DEP,RS mgmt;
+    class NG,EC2 node;
+    class MS,HPA,VPA,CA,PROM,GRAF,VELERO,S3 ctrl;
+```
+
+The relationships reviewers check first: the **AWS Load Balancer Controller**
+watches the Ingress and provisions/configures the ALB (the ALB never reads
+Kubernetes itself); the **Service selects Ready Pods** by label, never
+Deployments or ReplicaSets; the **scheduler binds *Pending* Pods to Nodes**; the
+**Metrics Server reads kubelet metrics** and feeds the **HPA**, which scales the
+**Deployment**; the **Cluster Autoscaler is triggered by Pending Pods** and grows
+the node group (it never creates Pods); **VPA is recommend-only**; **Prometheus
+scrapes** Pods and Nodes; and **Velero reads objects from the API server and
+writes backups to S3**.
+
 > Larger, layer-by-layer diagrams live in [docs/diagrams/](docs/diagrams/):
 > request lifecycle, autoscaling decision flow, scheduling, control-plane
 > interaction, the monitoring pipeline, and more.

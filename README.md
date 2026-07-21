@@ -65,8 +65,8 @@ flowchart TB
           SCH["scheduler"]
           CM["controller-manager"]
           API <-->|persist / watch| ETCD
-          API --- SCH
-          API --- CM
+          SCH -. watches · binds .-> API
+          CM  -. watches · reconciles .-> API
         end
 
         subgraph EDGE["Ingress and routing"]
@@ -116,15 +116,15 @@ flowchart TB
       S3[("Amazon S3<br/>cluster backups")]
     end
 
-    %% ---- request data path (solid) ----
+    %% ---- request data path (solid): Client → ALB → Ingress → Service → Pods ----
     CLIENT -->|HTTPS| ALB
-    ALB -->|routes to Ready targets| SVC
+    ALB -->|routes| ING
+    ING -->|backend: Service| SVC
     SVC -->|selects Ready Pods| PODS
 
-    %% ---- ingress provisioning: the controller bridges Ingress and the ALB ----
-    ING -. watched by .-> LBC
+    %% ---- ingress control: the controller watches the Ingress and provisions the ALB ----
+    LBC -. watches .-> ING
     LBC -. provisions / configures .-> ALB
-    ING -. backend: Service .-> SVC
 
     %% ---- control plane governs the workload ----
     KCTL -->|apply| API
@@ -132,14 +132,15 @@ flowchart TB
     SCH -. binds Pending Pods to Nodes .-> PODS
     PODS -. scheduled onto .-> EC2
 
-    %% ---- autoscaling, each on its correct target ----
-    EC2 -. kubelet metrics .-> MS
-    MS -. pod CPU / mem .-> HPA
+    %% ---- autoscaling: each controller reads/writes through the API server, then acts ----
+    MS  -. scrapes kubelet .-> EC2
+    MS  -. serves metrics API .-> API
+    HPA -. reads metrics via API .-> API
     HPA -. scales replicas .-> DEP
-    VPA -. observes usage .-> PODS
+    VPA -. reads usage · writes recommendation .-> API
     VPA -. recommends requests .-> DEP
-    PODS -. pending Pods .-> CA
-    CA -. adjusts desired size .-> NG
+    CA  -. watches for Pending Pods .-> API
+    CA  -. adjusts desired size .-> NG
 
     %% ---- monitoring: Prometheus scrapes, Grafana reads ----
     PROM -. scrapes .-> PODS
@@ -162,15 +163,19 @@ flowchart TB
     class MS,HPA,VPA,CA,PROM,GRAF,VELERO,S3 ctrl;
 ```
 
-The relationships reviewers check first: the **AWS Load Balancer Controller**
-watches the Ingress and provisions/configures the ALB (the ALB never reads
-Kubernetes itself); the **Service selects Ready Pods** by label, never
-Deployments or ReplicaSets; the **scheduler binds *Pending* Pods to Nodes**; the
-**Metrics Server reads kubelet metrics** and feeds the **HPA**, which scales the
-**Deployment**; the **Cluster Autoscaler is triggered by Pending Pods** and grows
-the node group (it never creates Pods); **VPA is recommend-only**; **Prometheus
-scrapes** Pods and Nodes; and **Velero reads objects from the API server and
-writes backups to S3**.
+The relationships reviewers check first: the request path is
+**Client → ALB → Ingress → Service → Pods**, and every controller acts through
+the **API server** rather than poking workloads directly. The **AWS Load Balancer
+Controller** watches the Ingress and provisions/configures the ALB (the ALB never
+reads Kubernetes itself). The **Service selects Ready Pods** by label, never
+Deployments or ReplicaSets. The **scheduler binds *Pending* Pods to Nodes** — it
+schedules Pods, not Nodes. The **Metrics Server scrapes the kubelets** and serves
+the metrics API; the **HPA reads those metrics through the API server** and scales
+the **Deployment**. The **Cluster Autoscaler watches the API server for Pending
+Pods** and grows the node group (it never creates Pods). **VPA is recommend-only**:
+it reads usage and writes a *recommendation* (a human applies it at the next
+deploy). **Prometheus scrapes** Pods and Nodes and discovers targets via the API
+server; and **Velero reads objects from the API server and writes backups to S3**.
 
 > Larger, layer-by-layer diagrams live in [docs/diagrams/](docs/diagrams/):
 > request lifecycle, autoscaling decision flow, scheduling, control-plane

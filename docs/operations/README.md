@@ -2,7 +2,7 @@
 
 Running the platform day to day: routine health checks, backups, restore, and
 disaster recovery. The goal is that nothing here requires re-deriving how the
-system works during an incident — it's all written down.
+system works during an incident. It's all written down.
 
 ---
 
@@ -27,9 +27,9 @@ velero backup get                        # last 7 backups Completed?
 Open **Goldilocks** and compare its recommendations to current requests; if
 they've drifted materially, plan a request update at the next deploy.
 
-### Monthly (30–60 minutes)
+### Monthly (30-60 minutes)
 - Review HPA behaviour over the month (max replicas hit? flapping?).
-- **Test a restore** (below) into a scratch namespace — an untested backup is a
+- **Test a restore** (below) into a scratch namespace. An untested backup is a
   hope, not a backup.
 - Review IAM/IRSA roles for least privilege ([../security/](../security/)).
 - Check for EKS control-plane / node-group version updates.
@@ -40,7 +40,7 @@ they've drifted materially, plan a request update at the next deploy.
 ## Backups (Velero)
 
 Backups run automatically via the Schedule in
-[`k8s/backup/velero-schedule.yaml`](../../k8s/backup/velero-schedule.yaml) —
+[`k8s/backup/velero-schedule.yaml`](../../k8s/backup/velero-schedule.yaml):
 daily 03:00 UTC, 7-day retention, `default` + `monitoring` + `kube-system`.
 
 ```bash
@@ -52,7 +52,7 @@ velero backup create manual-$(date +%s) \
 ```
 
 **What's backed up:** cluster *objects* (namespaces, RBAC, ConfigMaps, Secrets,
-Ingress, Deployments) — not volumes (`snapshotVolumes: false`), because the app
+Ingress, Deployments), not volumes (`snapshotVolumes: false`), because the app
 is stateless. We back up the *configuration*, not disks.
 
 ---
@@ -75,7 +75,7 @@ kubectl delete ns restore-test           # clean up after verifying
 
 ---
 
-## Disaster recovery — full cluster loss
+## Disaster recovery: full cluster loss
 
 If the cluster is gone, the recovery order is:
 

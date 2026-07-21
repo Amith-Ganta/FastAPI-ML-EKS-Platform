@@ -89,7 +89,7 @@ flowchart TB
 ```
 
 **RPO** (data loss window): ≤ 24h for cluster config (daily backups). The app
-itself is stateless, so there's no application data to lose — only configuration.
+itself is stateless, so there's no application data to lose, only configuration.
 **RTO** (time to recover): dominated by cluster + controller reinstall; the
 Velero restore itself is minutes.
 
@@ -121,4 +121,4 @@ eksctl delete cluster --name insurance-cluster --region us-east-1
 
 Verify afterward that ELBs and node-group EC2 instances are actually gone (a
 lingering LoadBalancer Service can leave an orphaned ELB billing after cluster
-deletion — check the EC2 console).
+deletion, so check the EC2 console).

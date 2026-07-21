@@ -88,7 +88,7 @@ Predicts insurance premium category based on user demographics and health metric
 | Field | Type | Description |
 |-------|------|-------------|
 | `response.predicted_category` | string | Most likely premium category (`Low` / `Medium` / `High`) |
-| `response.confidence` | float | Probability of the predicted category (0–1, rounded to 2 dp) |
+| `response.confidence` | float | Probability of the predicted category (0 to 1, rounded to 2 dp) |
 | `response.class_probabilities` | object | Probability for every category, summing to ~1.0 |
 
 #### Example Request

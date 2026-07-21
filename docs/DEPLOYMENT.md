@@ -1,9 +1,9 @@
 # Deployment Guide
 
 The API ships as a single, self-contained image on Docker Hub:
-**`tweakster24/insurance-premium-api:latest`** — the validated image used
+**`tweakster24/insurance-premium-api:latest`**, the validated image used
 throughout the EKS deployment. Deploying anywhere is the same
-`docker pull && docker run` — no environment-specific build step.
+`docker pull && docker run`, with no environment-specific build step.
 
 ---
 
@@ -86,10 +86,10 @@ On every push to `main` the pipeline:
 1. Pulls the validated image `tweakster24/insurance-premium-api:latest`.
 2. Boots the container and smoke-tests `/docs` and `/predict` against the real
    HTTP contract.
-3. SSH-deploys the image to the EC2 host and verifies it is reachable — **only
+3. SSH-deploys the image to the EC2 host and verifies it is reachable. **Only
    if** the tests pass.
 
-The EC2 deploy step is guarded — a missing secret skips it without failing the
+The EC2 deploy step is guarded: a missing secret skips it without failing the
 run, so the pipeline is always green.
 
 ### Required repository secrets
@@ -97,7 +97,7 @@ run, so the pipeline is always green.
 | Secret | Purpose | Example |
 |--------|---------|---------|
 | `AWS_HOST` | EC2 public IP (SSH deploy) | `204.236.207.23` |
-| `AWS_SSH_KEY` | EC2 private key — full PEM contents | `-----BEGIN …` |
+| `AWS_SSH_KEY` | EC2 private key, full PEM contents | `-----BEGIN …` |
 | `AWS_USER` | EC2 SSH user *(optional)* | `ubuntu` |
 
 Set them under **GitHub → repo → Settings → Secrets and variables → Actions**.

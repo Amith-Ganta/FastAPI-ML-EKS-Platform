@@ -42,11 +42,11 @@ sequenceDiagram
     HPA->>P: compute desired, add replicas (fast scale-up)
     P->>SCH: new pods Pending
     SCH->>P: bind to nodes with room
-    Note over P: ~15–30s: pull + startup + readiness
+    Note over P: ~15-30s: pull + startup + readiness
     P-->>L: new pods join Service, CPU/​pod drops
     alt nodes full (≈11 pods/t3.small)
         P->>CA: some pods stay Pending
-        CA->>SCH: add EC2 node (~1–3 min)
+        CA->>SCH: add EC2 node (~1-3 min)
         SCH->>P: schedule the Pending pods
     end
     Note over L: load ends
@@ -56,15 +56,15 @@ sequenceDiagram
 
 **Key latencies to expect:**
 - HPA reaction: within one **15s** sync after CPU crosses target.
-- New pod Ready: **~15–30s** (image cached) — why the target is 50%, not 90%.
-- New **node** via Cluster Autoscaler: **~1–3 min** (EC2 launch + join).
+- New pod Ready: **~15-30s** (image cached), which is why the target is 50%, not 90%.
+- New **node** via Cluster Autoscaler: **~1-3 min** (EC2 launch + join).
 - Scale-down: deliberately slow (**5-min** stabilization) to avoid thrashing.
 
 ---
 
 ## How the resource numbers were derived
 
-Nothing here was guessed — the flow was **measure → recommend → set**:
+Nothing here was guessed. The flow was **measure → recommend → set**:
 
 1. Deploy with generous initial requests.
 2. Drive real traffic (above).
@@ -73,7 +73,7 @@ Nothing here was guessed — the flow was **measure → recommend → set**:
    `memory 256Mi` (the real constraint), with `memory limit == request` for
    Guaranteed QoS.
 
-This is the whole reason VPA + Goldilocks exist in the stack — see
+This is the whole reason VPA + Goldilocks exist in the stack. See
 [../kubernetes/DESIGN_DECISIONS.md](../kubernetes/DESIGN_DECISIONS.md).
 
 ---
@@ -84,8 +84,8 @@ A `t3.small` supports roughly **11 pods** (an ENI/IP-per-node limit, not CPU or
 memory). With 2 nodes that's ~22 pod slots, shared with the monitoring stack.
 Consequences baked into the design:
 
-- HPA `maxReplicas: 10` — realistic headroom without assuming infinite nodes.
-- Cluster Autoscaler is **required**, not optional — it's what turns "the 11th
+- HPA `maxReplicas: 10` gives realistic headroom without assuming infinite nodes.
+- Cluster Autoscaler is **required**, not optional. It's what turns "the 11th
   pod is Pending" into "add a node."
 - A CPU-bound production workload would move to larger instances; here the low
   ceiling is a documented teaching constraint, not a hidden surprise.
@@ -105,5 +105,5 @@ flowchart LR
     RAISE --> RUN
 ```
 
-Right-sizing is never "done" — it's a loop you re-run whenever the model, the
+Right-sizing is never "done." It's a loop you re-run whenever the model, the
 traffic shape, or the instance type changes.

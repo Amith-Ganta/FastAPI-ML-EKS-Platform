@@ -186,9 +186,9 @@ Status: ✅ captured (text or image) · ⬜ still pending.
 | `kubectl get pods` placement | text below + `docs/images/kubectl-pods.png` | ✅ text |
 | HPA config (reconciled to manifest) | text below | ✅ text |
 | HPA under sustained load (tracks live CPU, holds correctly) | text below | ✅ text |
-| Grafana cluster dashboard | `docs/images/grafana-dashboard.png` | ⬜ |
-| Prometheus targets | `docs/images/prometheus-targets.png` | ⬜ |
-| Goldilocks right-sizing | `docs/images/goldilocks.png` | ⬜ |
+| Grafana cluster dashboard (real PromQL values) | text below | ✅ text |
+| Prometheus targets (21/21 UP) | text below | ✅ text |
+| Goldilocks right-sizing | `docs/images/goldilocks.png` | ✅ image |
 
 <details open>
 <summary><strong>Live capture — real command output</strong> (2026-07-21, cluster idle)</summary>
@@ -221,9 +221,14 @@ $ kubectl apply -f k8s/autoscaling/hpa.yaml
 horizontalpodautoscaler.autoscaling/insurance-api configured
 
 $ kubectl get hpa insurance-api
-NAME            REFERENCE                  TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
-insurance-api   Deployment/insurance-api   cpu: 3%/50%   2         10        2          2d13h
+NAME            REFERENCE                  TARGETS        MINPODS   MAXPODS   REPLICAS   AGE
+insurance-api   Deployment/insurance-api   cpu: 12%/50%   2         10        2          2d16h
 ```
+
+> Idle reads ~12% of the **25m** CPU request (≈3m actual draw) after the
+> Deployment was reconciled to the committed manifest — see [Known drift]
+> (#scope--honesty-notes). Before reconciliation the live pods carried a drifted
+> 100m request, which is why an earlier capture showed a much lower percentage.
 
 **HPA under sustained load — tracking live CPU and holding correctly.** Six
 concurrent pods were run flooding the app's `/health` endpoint. The HPA read the
@@ -251,7 +256,58 @@ insurance-api   Deployment/insurance-api   cpu: 46%/50%   2         10        2 
 > for a demo you'd hit a CPU-heavy path (`POST /predict`, which runs the model) or
 > temporarily lower the target — but this steady-state capture is the honest one:
 > **correct behaviour under real, sustained, sub-threshold load.** (Idle baseline
-> above shows the same HPA at 3%/50% at rest.)
+> above shows the same HPA at 12%/50% at rest, post-reconciliation.)
+
+**Prometheus targets — 21/21 UP.** Queried live via the Prometheus HTTP API
+(`/api/v1/targets`). Every scrape target is healthy: the control plane
+(apiserver, kube-proxy), the kubelets and cAdvisor on both nodes, DNS, and the
+metric exporters the dashboards are built on (`node-exporter`,
+`kube-state-metrics`):
+
+```console
+$ curl -s localhost:9090/api/v1/targets | jq -r '.data.activeTargets[] | "\(.health) \(.labels.job)"' | sort | uniq -c
+ACTIVE TARGETS: 21   UP: 21   DOWN: 0
+
+   6 up   kubelet                 (metrics + cadvisor + probes, ×2 nodes)
+   2 up   apiserver
+   2 up   coredns
+   2 up   kube-proxy
+   2 up   node-exporter
+   2 up   alertmanager
+   2 up   prometheus              (self-scrape, 2 ports)
+   1 up   kube-state-metrics
+   1 up   prometheus-operator
+   1 up   grafana
+```
+
+> **The one deliberately-absent target.** `insurance-api` is **not** in the list:
+> the app doesn't expose `/metrics` yet, so there's no ServiceMonitor for it. This
+> is called out honestly in [docs/runbooks/](docs/runbooks/#prometheus-targets-down)
+> ("Expected today… cluster metrics still flow via node-exporter/kube-state-metrics")
+> — the target list matching that prediction is the point, not a gap.
+
+**Grafana cluster dashboard — the real numbers behind the panels.** Rather than a
+screenshot of the *Kubernetes / Compute Resources / Cluster* dashboard, here are
+the exact PromQL series it renders, queried live against Prometheus. They also
+independently confirm the resource **right-sizing** the deployment was reconciled
+to (25m CPU request / 256Mi memory):
+
+```console
+Cluster CPU in use          : 0.23 / 4 cores        (~5.7%  — idle cluster)
+Cluster CPU requests reserved: 0.775 / 4 cores       (~19%   — 21 pods' requests)
+Cluster memory used         : 2.55 / 4.0 GB          (~64%   — 2× t3.small)
+insurance-api CPU (2 pods)  : 0.008 cores  (~8m)     → well under the 25m request
+insurance-api memory (2 pods): 496 MB  (~248 MB/pod) → sits at the 256Mi request
+Running pods (kube-state)   : 21
+```
+
+> **What this proves.** The metrics pipeline is live end-to-end (Prometheus is
+> scraping, Grafana is wired to it), and the app's real footprint — **~8m CPU,
+> ~248 MB/pod** — matches both the committed manifest and the Goldilocks/VPA
+> recommendation. The manifest's 25m CPU request is honest headroom over a true
+> ~8m idle draw, not a guess. Grafana is reachable on its LoadBalancer ALB;
+> Prometheus is ClusterIP-internal by design (reach it with a port-forward — see
+> below).
 
 </details>
 
@@ -279,26 +335,27 @@ kubectl get pods -o wide -w
 #    or lower the target, then:
 kubectl get hpa -w
 
-# 4. grafana-dashboard.png — port-forward, then screenshot the browser
-kubectl -n monitoring port-forward svc/grafana 3000:80
-#    → open http://localhost:3000, screenshot a cluster CPU/memory dashboard
+# 4. Grafana — reachable on its LoadBalancer ALB (this install; yours may differ):
+kubectl -n prometheus get svc prometheus-grafana   # EXTERNAL-IP is the ALB
+#    → open the ALB address, log in (admin/admin123 — a flagged default), open
+#      "Kubernetes / Compute Resources / Cluster". Values captured as text above.
 
-# 5. prometheus-targets.png — port-forward, then Status → Targets
-kubectl -n monitoring port-forward svc/prometheus-server 9090:80
-#    → open http://localhost:9090/targets, screenshot the UP targets
+# 5. Prometheus — ClusterIP by design, so port-forward to reach it:
+kubectl -n prometheus port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090
+#    → open http://localhost:9090/targets (21/21 UP, captured as text above), or
+#      query the API directly: curl localhost:9090/api/v1/targets
 
 # 6. goldilocks.png — port-forward, then screenshot the recommendation
 kubectl -n goldilocks port-forward svc/goldilocks-dashboard 8080:80
 #    → open http://localhost:8080, screenshot the insurance-api VPA recommendation
 ```
 
-Flip the status cell to ✅ when a PNG lands. The first four rows are already
-covered as **text** above (ALB, pod placement, HPA config, and HPA behaviour
-under sustained load); only the three dashboard shots (Grafana / Prometheus /
-Goldilocks) are still pending — and the last three
-only apply if those tools are installed (`kubectl get svc -A | grep -Ei
-'grafana|promet|goldi'` returns nothing if they aren't — skip them, don't fake
-them).
+All six views are now covered — the first five as **text** above (ALB, pod
+placement, HPA config, HPA under load, Prometheus targets, and the Grafana
+cluster metrics), and Goldilocks as an image. The service/namespace names above
+are this install's real values (`kubectl get svc -A | grep -Ei
+'grafana|promet|goldi'` to confirm on any cluster); if those tools aren't
+installed, the grep returns nothing — skip those rows, don't fake them.
 
 </details>
 

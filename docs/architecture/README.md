@@ -11,7 +11,7 @@ set is in [../diagrams/](../diagrams/).
 ## The one idea the whole platform is built on
 
 > **You cannot derive the right runtime configuration from static specs. Only
-> real traffic tells you the right replica count and pod size — so measure,
+> real traffic tells you the right replica count and pod size, so measure,
 > then decide.**
 
 Every layer is a direct consequence of that idea:
@@ -30,8 +30,8 @@ workload available, right-sized, and observable as load changes underneath it.
 ## Layered view
 
 One diagram, every real relationship: the request path, the three autoscalers
-acting on their *correct* targets, the observability pipeline, DR, and — the part
-most diagrams wrongly leave floating — the **control plane actually managing the
+acting on their *correct* targets, the observability pipeline, DR, and the part
+most diagrams wrongly leave floating: the **control plane actually managing the
 cluster**. Solid arrows are the live request path; dashed arrows are
 control/observe relationships, each labelled with what it really does.
 
@@ -42,8 +42,8 @@ flowchart TB
     %%   Lane A (left)   : request path, top-to-bottom, no branches.
     %%   Lane B (center) : EKS-managed control plane, self-contained.
     %%   Lane C (right)  : platform controllers (autoscaling / monitoring / DR).
-    %% Cross-lane arrows only ever touch the Deployment or the Pods — the two
-    %% real convergence points — so no arrow passes through an unrelated box.
+    %% Cross-lane arrows only ever touch the Deployment or the Pods (the two
+    %% real convergence points), so no arrow passes through an unrelated box.
     %% ===================================================================
 
     CLIENT([" Internet<br/>client "])
@@ -75,7 +75,7 @@ flowchart TB
           ALB["AWS ALB"]
           ING["Ingress<br/>group: insurance-platform"]
           SVC["Service · ClusterIP<br/>:80 → :8000 · label selector"]
-          PODS["Pods<br/>uvicorn :8000 · 2–10"]
+          PODS["Pods<br/>uvicorn :8000 · 2-10"]
           ALB --> ING --> SVC
           SVC -->|selects Ready Pods| PODS
         end
@@ -98,7 +98,7 @@ flowchart TB
         subgraph SCALE["Autoscaling"]
           direction TB
           MS["Metrics Server"]
-          HPA["HPA<br/>CPU/Mem 50% · 2–10"]
+          HPA["HPA<br/>CPU/Mem 50% · 2-10"]
           VPA["VPA<br/>recommend-only"]
           CA["Cluster Autoscaler"]
         end
@@ -152,23 +152,23 @@ flowchart TB
     class MS,HPA,VPA,CA,PROM,GRAF,VELERO,S3 ctrl;
 ```
 
-**How to read it — the relationships reviewers check first:**
+**How to read it, the relationships reviewers check first:**
 
 - **Two flows meet only at the Pods.** *Traffic* is Client → ALB → Ingress →
   Service → Pods. *Management* is Deployment → ReplicaSet → Pods. The Deployment
-  is **not** on the request path — traffic never passes through it.
+  is **not** on the request path; traffic never passes through it.
 - **The Service selects Pods by label, not through the Deployment.** A ClusterIP
   Service matches its `selector` against *Ready* Pod labels; it has no knowledge
   of Deployments or ReplicaSets. That is why the arrow goes Service → Pods.
 - **The ReplicaSet creates the Pods.** The Deployment *owns* the ReplicaSet, which
-  *creates and maintains* the Pods — the ownership chain the controller-manager
-  reconciles when you change the replica count or image.
+  *creates and maintains* the Pods. That ownership chain is what the
+  controller-manager reconciles when you change the replica count or image.
 - **HPA scales the Deployment, not the Service and not the Pods directly.** It
   reads CPU/memory from the **Metrics Server** and patches the Deployment's
   replica count; the ReplicaSet then adds or removes Pods.
 - **Cluster Autoscaler is triggered by Pending Pods.** When Pods can't be
   scheduled, that pressure drives the Cluster Autoscaler to grow the **Managed
-  Node Group's** ASG, which launches new **Nodes** — then the scheduler places the
+  Node Group's** ASG, which launches new **Nodes**; then the scheduler places the
   pending Pods. The autoscaler never creates Pods itself.
 - **VPA does not resize running Pods.** In `recommend-only` mode it *observes*
   Pods and writes request *recommendations* (a human applies them to the
@@ -180,10 +180,10 @@ flowchart TB
   plane on the request path.
 - **Observability flows one way:** Prometheus *scrapes* the kubelet/cAdvisor on the
   Nodes and the application Pods; **Grafana queries Prometheus**. Backups are
-  **Velero → S3** — Prometheus never writes to S3.
+  **Velero → S3**; Prometheus never writes to S3.
 
-Three autoscalers, three non-overlapping dimensions — HPA (how many pods), VPA
-(how big each pod), Cluster Autoscaler (how many nodes) — none steps on another's
+Three autoscalers cover three non-overlapping dimensions: HPA (how many pods), VPA
+(how big each pod), Cluster Autoscaler (how many nodes). None steps on another's
 decision.
 
 ---
@@ -194,13 +194,13 @@ decision.
    Balancer Controller). The ALB has already dropped unhealthy targets via its
    health check on `/health`, so traffic only reaches pods that can serve it.
 2. The ALB forwards to the **Service** (ClusterIP). The Service load-balances
-   only across **Ready** pods — the `readinessProbe` decides membership, so a
+   only across **Ready** pods; the `readinessProbe` decides membership, so a
    pod that is still warming up never receives a request.
 3. **kube-proxy** DNATs the Service virtual IP to a concrete pod IP.
 4. The **pod** (`uvicorn` on port 8000) runs the model in-memory and returns the
    prediction (`predicted_category` + confidence + class probabilities).
 5. Throughout, the `liveness` and `readiness` probes run in parallel, and the
-   **Metrics Server** samples CPU — the signal the **HPA** reads to decide
+   **Metrics Server** samples CPU, the signal the **HPA** reads to decide
    whether to add or remove pods.
 
 The step-by-step sequence diagram is
@@ -219,7 +219,7 @@ matters here:
 > etcd; controllers and kubelets each notice the change and act independently.
 
 That level-triggered, watch-and-reconcile model is exactly why the system
-self-heals. A dead pod is not "recreated by a command" — the ReplicaSet
+self-heals. A dead pod is not "recreated by a command." The ReplicaSet
 controller notices that reality has drifted from desired state and corrects it,
 with no operator in the loop. See
 [diagram #9](../diagrams/README.md#9-control-plane-interaction-what-happens-on-kubectl-apply).
@@ -229,7 +229,7 @@ with no operator in the loop. See
 ## Why an EKS-managed control plane
 
 Self-hosting etcd and the control plane is a full-time reliability job with a
-large blast radius — a botched etcd upgrade or a lost quorum takes the whole
+large blast radius: a botched etcd upgrade or a lost quorum takes the whole
 cluster with it. EKS trades a small hourly fee and some AWS coupling for an HA
 control plane, managed patching, and a much smaller operational surface. For
 anything beyond a throwaway local cluster, that is the right trade. The full
@@ -247,6 +247,6 @@ rationale and the alternatives considered are in
 
 This separation is deliberate. The platform treats the image as an immutable,
 validated black box and provides everything *around* it. That is why swapping the
-app — or adding the `/metrics` endpoint — is an image change, not a platform
+app (or adding the `/metrics` endpoint) is an image change, not a platform
 change: the manifests, autoscalers, and observability wiring stay exactly as they
 are.

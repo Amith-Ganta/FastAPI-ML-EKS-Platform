@@ -53,7 +53,7 @@ flowchart TB
     ALB --> SVC
     HPA -.-> PODS
     CA -.-> PODS
-    VPA -.-> GRAF
+    VPA -.-> PODS
 ```
 
 ---

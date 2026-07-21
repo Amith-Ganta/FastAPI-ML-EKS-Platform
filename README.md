@@ -83,7 +83,7 @@ flowchart TB
     MS --> HPA
     HPA -. scales replicas .-> SVC
     CA -. adds nodes .-> NG
-    VPA -. recommends size .-> MON
+    VPA -. recommends size .-> P1 & P2 & P3
     MON --> S3
 
     classDef ctl fill:#EEF2FF,stroke:#6366F1,color:#1E1B4B;

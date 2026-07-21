@@ -285,7 +285,7 @@ Full playbook (EC2 setup, security groups, the Streamlit container) in [docs/DEP
 
 | Secret | Used for | Example |
 |--------|----------|---------|
-
+| `DOCKER_USERNAME` | Docker Hub login | `tweakster24` |
 | `DOCKER_TOKEN` | Docker Hub access token | `dckr_pat_…` |
 | `AWS_HOST` | EC2 public IP for SSH deploy | `204.236.207.23` |
 | `AWS_SSH_KEY` | EC2 private key (PEM contents) | `-----BEGIN …` |

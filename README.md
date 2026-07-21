@@ -175,16 +175,60 @@ docker run -p 8000:8000 tweakster24/insurance-premium-api:latest
 
 ## Screenshots
 
-Drop real captures into [docs/images/](docs/images/) and they render here.
+Real captures from the live cluster. Status marks which are in the repo; ⬜ ones
+render once the PNG is dropped into [docs/images/](docs/images/) under the exact
+filename shown.
 
-| View | File |
-|---|---|
-| Grafana cluster dashboard | `docs/images/grafana-dashboard.png` |
-| Prometheus targets | `docs/images/prometheus-targets.png` |
-| Goldilocks right-sizing | `docs/images/goldilocks.png` |
-| HPA scaling under load | `docs/images/hpa-scaling.png` |
-| `kubectl get pods` during a scale-out | `docs/images/kubectl-pods.png` |
-| ALB / LoadBalancer address | `docs/images/loadbalancer.png` |
+| View | File | Status |
+|---|---|:--:|
+| ALB / LoadBalancer address | `docs/images/loadbalancer.png` | ⬜ |
+| `kubectl get pods` during a scale-out | `docs/images/kubectl-pods.png` | ⬜ |
+| HPA scaling under load | `docs/images/hpa-scaling.png` | ⬜ |
+| Grafana cluster dashboard | `docs/images/grafana-dashboard.png` | ⬜ |
+| Prometheus targets | `docs/images/prometheus-targets.png` | ⬜ |
+| Goldilocks right-sizing | `docs/images/goldilocks.png` | ⬜ |
+
+<details>
+<summary><strong>How to capture these</strong> — six commands, run against the live cluster</summary>
+
+Discover the real service/namespace names first (they vary by install):
+
+```bash
+kubectl get svc -A | grep -Ei 'grafana|promet|goldi'
+```
+
+Then capture each — save every file under `docs/images/` with the **exact**
+filename from the table above:
+
+```bash
+# 1. loadbalancer.png — the ALB address (ADDRESS column)
+kubectl get ingress -A
+
+# 2. kubectl-pods.png — pods mid scale-out (extra replicas appearing)
+kubectl get pods -o wide -w
+
+# 3. hpa-scaling.png — REPLICAS climbing while a load test runs
+#    (start the load test first: see docs/performance/)
+kubectl get hpa -w
+
+# 4. grafana-dashboard.png — port-forward, then screenshot the browser
+kubectl -n monitoring port-forward svc/grafana 3000:80
+#    → open http://localhost:3000, screenshot a cluster CPU/memory dashboard
+
+# 5. prometheus-targets.png — port-forward, then Status → Targets
+kubectl -n monitoring port-forward svc/prometheus-server 9090:80
+#    → open http://localhost:9090/targets, screenshot the UP targets
+
+# 6. goldilocks.png — port-forward, then screenshot the recommendation
+kubectl -n goldilocks port-forward svc/goldilocks-dashboard 8080:80
+#    → open http://localhost:8080, screenshot the insurance-api VPA recommendation
+```
+
+Capture the HPA/pods shots **during an actual load test** (see
+[docs/performance/](docs/performance/)) so they show real scaling, not an idle
+cluster. Flip the status cell to ✅ when the PNG lands.
+
+</details>
 
 ---
 

@@ -191,9 +191,9 @@ kubectl describe ingress <ingress>
 **Symptom:** LB/ALB is up but requests 503 or hang.
 
 ```bash
-kubectl get endpoints insurance-api   # <-- MOST IMPORTANT: is it empty?
+kubectl get endpoints insurance-api-service   # <-- MOST IMPORTANT: is it empty? (Service is *-service)
 kubectl get pods -l app=insurance-api
-kubectl describe svc insurance-api    # selector vs pod labels
+kubectl describe svc insurance-api-service     # selector vs pod labels
 ```
 
 | Finding | Meaning | Fix |

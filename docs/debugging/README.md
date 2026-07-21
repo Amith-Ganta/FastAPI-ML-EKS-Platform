@@ -51,7 +51,7 @@ kubectl get events --field-selector type=Warning
 are empty, no pods are Ready behind it — it's a *pod-health* problem, not a
 Service problem.
 ```bash
-kubectl get endpoints insurance-api
+kubectl get endpoints insurance-api-service   # the Service is *-service; deploy/HPA are plain insurance-api
 kubectl get svc                     # types + EXTERNAL-IP / <pending>
 kubectl describe ingress
 ```

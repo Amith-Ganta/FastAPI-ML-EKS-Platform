@@ -1,15 +1,15 @@
 # kubectl debugging playbook
 
-Not a command dump — *what each command tells you* and *when to reach for it*
-during a real incident. Ordered by how often you'll actually use them.
+Not a command dump. This covers *what each command tells you* and *when to reach
+for it* during a real incident, ordered by how often you'll actually use them.
 
 ---
 
 ## The four you'll use in 90% of incidents
 
 ### `kubectl get pods -o wide`
-The state of the world. `-o wide` adds **NODE** and **IP** — essential for
-"is this one node or the whole cluster?" Watch `STATUS` and `RESTARTS`.
+The state of the world. `-o wide` adds **NODE** and **IP**, which you need to
+answer "is this one node or the whole cluster?" Watch `STATUS` and `RESTARTS`.
 ```bash
 kubectl get pods -o wide
 kubectl get pods -w                 # stream changes live during a rollout
@@ -18,7 +18,7 @@ kubectl get pods -l app=insurance-api
 
 ### `kubectl describe <kind> <name>`
 The **Events** section at the bottom is where Kubernetes tells you *why*. Failed
-scheduling, image pull errors, probe failures, OOM kills — all here.
+scheduling, image pull errors, probe failures, and OOM kills all show up here.
 ```bash
 kubectl describe pod <pod>
 kubectl describe node <node>        # Conditions + Allocated resources
@@ -26,8 +26,8 @@ kubectl describe hpa insurance-api  # scaling decisions + why
 ```
 
 ### `kubectl logs`
-What the application itself said. `--previous` is the one people forget — it's
-the logs of the *crashed* container, the only place the crash reason lives.
+What the application itself said. `--previous` is the one people forget. It gives
+you the logs of the *crashed* container, the only place the crash reason lives.
 ```bash
 kubectl logs <pod>
 kubectl logs <pod> --previous       # the container that just died
@@ -48,10 +48,10 @@ kubectl get events --field-selector type=Warning
 
 ### `kubectl get endpoints`
 **The single fastest triage for a routing problem.** If a Service's endpoints
-are empty, no pods are Ready behind it — it's a *pod-health* problem, not a
+are empty, no pods are Ready behind it, so it's a *pod-health* problem, not a
 Service problem.
 ```bash
-kubectl get endpoints insurance-api-service   # the Service is *-service; deploy/HPA are plain insurance-api
+kubectl get endpoints insurance-api   # Service, Deployment, and HPA all share the name insurance-api
 kubectl get svc                     # types + EXTERNAL-IP / <pending>
 kubectl describe ingress
 ```
@@ -60,7 +60,7 @@ kubectl describe ingress
 ```bash
 # Exec into any pod and curl the Service by DNS name
 kubectl exec -it <pod> -- sh -c 'wget -qO- http://insurance-api/health || true'
-# (image is slim — if no wget, run a throwaway debug pod:)
+# (image is slim; if no wget, run a throwaway debug pod:)
 kubectl run tmp --rm -it --image=busybox --restart=Never -- \
   wget -qO- http://insurance-api.default.svc.cluster.local/health
 ```
@@ -70,7 +70,7 @@ kubectl run tmp --rm -it --image=busybox --restart=Never -- \
 ## Resource & scaling
 
 ### `kubectl top`
-Live CPU/memory (needs Metrics Server — the same source the HPA uses). If
+Live CPU/memory (needs Metrics Server, the same source the HPA uses). If
 `top` fails, the HPA is blind too.
 ```bash
 kubectl top nodes
